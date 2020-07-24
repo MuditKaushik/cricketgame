@@ -1,0 +1,43 @@
+<div class="card">
+  <div class="card-body">
+    <div class="space-between">
+      <span>
+        <h5 class="card-title">
+          {{team.name}}
+          <span>
+            <h4>Score {{teamScore}}</h4>
+          </span>
+        </h5>
+        <h6 class="card-subtitle mb-2 text-muted">{{getLabel}}</h6>
+      </span>
+      <span>
+        <img [src]="getImage" alt="..." width="75" height="75" />
+      </span>
+    </div>
+    <table class="table caption-top">
+      <caption>Players</caption>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Run</th>
+          <th>Out</th>
+          <th>Over</th>
+          <th>Wides</th>
+          <th>No balls</th>
+          <th>Wickets taken</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let player of team.players">
+          <td>{{player.name}}</td>
+          <td>{{player.run}}</td>
+          <td>{{isOut(player)}}</td>
+          <td>{{player.over}}</td>
+          <td>{{player.wides}}</td>
+          <td>{{player.noBalls}}</td>
+          <td>{{player.wickets}}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>

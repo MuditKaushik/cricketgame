@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { BehaviorSubject, interval } from 'rxjs';
 import { timeInterval, switchMap } from 'rxjs/operators';
-import { IMatch, IPlayer } from './models/match';
+import { IMatch, IPlayer, getPlayers } from './models/match';
 
 
 @Component({
@@ -16,47 +16,59 @@ export class AppComponent {
   batsMan: IPlayer;
   baller: IPlayer;
 
-  match: IMatch = {
-    teamA: {
-      isBatting: false,
-      isPlayed: false,
-      overs: 20,
-      players: new Array<IPlayer>(5),
-      run: 0,
-      outs: 0
-    },
-    teamB: {
-      isBatting: false,
-      isPlayed: false,
-      overs: 20,
-      players: new Array<IPlayer>(5),
-      run: 0,
-      outs: 0
-    }
-  };
-
-  constructor() {
-    this.batsMan = this.defaultBatsMan;
-    this.baller = this.defaultBaller;
-  }
+  match: IMatch;
 
   protected isMatchStarted: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
   protected score = [0, 1, 2, 3, 4, 5, 6, 7, 'wd', 'nb', 'out'];
+  protected overPerMatch = 5;
 
-  overs: number = 20;
+  constructor() {
+    this.match = {
+      teamA: {
+        name: 'Team A',
+        isBatting: false,
+        isPlayed: false,
+        overs: 20,
+        players: getPlayers(),
+        run: 0,
+        outs: 0
+      },
+      teamB: {
+        name: 'Team B',
+        isBatting: false,
+        isPlayed: false,
+        overs: 20,
+        players: getPlayers(),
+        run: 0,
+        outs: 0
+      }
+    };
+    this.match.teamA.isBatting = true;
+  }
+
+  overs: number = 0;
   runs: number = 0;
   ballPerOver: number = 6;
+  hasMatchOver: boolean = false;
 
   pauseMatch(): void {
     this.isMatchStarted.next(false);
   }
+
   startMatch(): void {
     this.isMatchStarted.next(true);
     this.started();
   }
 
+  protected get generateRadomNumber(): number {
+    let start = 0;
+    let range = 11;
+    let rangeNum = (range - start) + start;
+    return Math.floor(Math.random() * rangeNum);
+  }
   protected started(): void {
     this.assignBattingTeam();
+    this.baller = this.assignNextBaller(this.pickRandomPlayer());
     interval(1000).pipe(
       timeInterval(),
       switchMap(_ => this.isMatchStarted),
@@ -67,102 +79,95 @@ export class AppComponent {
       }
     });
   }
-
-  ball(): void {
+  protected ball(): void {
     let index = this.generateRadomNumber;
     let ball = this.score[index];
     this.runScored(ball);
   }
-
-  runScored(ball: number | string): void {
+  protected runScored(ball: number | string): void {
     switch (ball) {
       case 'wd':
         // TODO: increment ballers wideBalls;
-        this.baller.wides += 1;
+        this.baller.wides = this.baller.wides + 1;
+        this.ballPerOver = this.ballPerOver + 1;
         this.increaseTeamScoreOnWideBall();
-        this.ballPerOver += 1;
         break;
       case 'nb':
         // TODO: increment ballers noBalls;
-        this.baller.noBalls += 1;
-        this.ballPerOver += 1;
+        this.baller.noBalls = this.baller.noBalls + 1;
+        this.ballPerOver = this.ballPerOver + 1;
         break;
       case 'out':
         // TODO: increment ballers wicket;
-        this.baller.wickets += 1;
-        this.ballPerOver -= 1;
+        this.baller.wickets = this.baller.wickets + 1;
+        this.ballPerOver = this.ballPerOver - 1;
+        this.batsMan.isOut = true;
         let wicketTaken = this.getTotalWicketsTaken();
         if (this.match.teamA.isBatting) {
           if (wicketTaken === this.match.teamA.players.length) {
             // TODO: switch teams;
             this.switchTeams();
+            this.assignBattingTeam()
           }
         } else if (this.match.teamB.isBatting) {
           if (wicketTaken === this.match.teamB.players.length) {
             // TODO: switch teams;
             this.switchTeams();
+            this.assignBattingTeam()
           }
-        } else {
-          // TODO: chosse next batsman;
-          this.batsMan = this.assignNextBatsman(this.pickRandomPlayer());
         }
+        // TODO: chosse next batsman;
+        this.batsMan = this.assignNextBatsman();
         break;
       default:
-        this.ballPerOver -= 1;
+        this.ballPerOver = this.ballPerOver - 1;
         if (ball !== 0) {
           // TODO: increase batting team runs.
-          this.batsMan.run += parseInt(ball.toString());
+          this.batsMan.run = this.batsMan.run + parseInt(ball.toString());
         }
         break;
     }
     if (this.ballPerOver === 0) {
       this.ballPerOver = 6;
-      this.assignNextBaller(this.pickRandomPlayer());
+      this.overs = this.overs + 1;
+      this.baller.over = this.overs;
+      if (this.overs === this.overPerMatch) {
+        this.switchTeams();
+        this.assignBattingTeam()
+      }
+      this.baller = this.assignNextBaller(this.pickRandomPlayer());
     }
-    this.calculateScore();
-  }
-
-  protected get generateRadomNumber(): number {
-    let start = 0;
-    let range = 11;
-    let rangeNum = (range - start) + start;
-    return Math.floor(Math.random() * rangeNum);
+    // this.calculateScore();
   }
   protected assignBattingTeam(): void {
-    if (!this.match.teamA.isBatting) {
-      this.match.teamA.isBatting = true;
+    if (!this.isMatchOver()) {
+      this.batsMan = this.assignNextBatsman();
+      this.baller = this.assignNextBaller(this.pickRandomPlayer());
     } else {
-      this.match.teamB.isBatting = true;
+      this.hasMatchOver = true;
+      this.isMatchStarted.next(false);
     }
   }
-  protected assignNextBatsman(nextbatsman: number): IPlayer {
+  protected assignNextBatsman(): IPlayer {
     if (this.match.teamA.isBatting) {
-      if (this.match.teamA.players[nextbatsman].isOut) {
-        return this.assignNextBatsman(this.pickRandomPlayer());
-      } else {
+      for (let player of this.match.teamA.players) {
+        if (!player.isOut) {
+          return player;
+        }
       }
     } else {
-      this.batsMan = this.match.teamB.players[nextbatsman];
+      for (let player of this.match.teamB.players) {
+        if (!player.isOut) {
+          return player;
+        }
+      }
     }
   }
-  protected assignNextBaller(nextballer: number): void {
+  protected assignNextBaller(nextballer: number): IPlayer {
     if (!this.match.teamA.isBatting) {
-      this.baller = this.match.teamA.players[nextballer];
+      return this.match.teamA.players[nextballer];
     } else {
-      this.baller = this.match.teamB.players[nextballer];
-    }
-  }
-  protected calculateScore(): void {
-    if (this.match.teamA.isBatting) {
-      this.match.teamA.run = this.match.teamA.players.reduce((initial, player) => {
-        return initial + player.run;
-      }, 0);
-      this.runs = this.match.teamA.run;
-    } else {
-      this.match.teamA.run = this.match.teamB.players.reduce((initial, player) => {
-        return initial + player.run;
-      }, 0);
-      this.runs = this.match.teamB.run;
+      return this.match.teamB.players[nextballer];
     }
   }
   protected increaseTeamScoreOnWideBall(): void {
@@ -174,54 +179,33 @@ export class AppComponent {
   }
   protected getTotalWicketsTaken(): number {
     if (this.match.teamA.isBatting) {
-      return this.match.teamB.players.reduce((initialWickt, player) => {
-        return initialWickt + player.wickets;
-      }, 0);
+      return this.match.teamA.players.filter(player => player.isOut).length;
     } else {
-      return this.match.teamA.players.reduce((initialWickt, player) => {
-        return initialWickt + player.wickets;
-      }, 0);
+      return this.match.teamB.players.filter(player => player.isOut).length;
     }
   }
   protected switchTeams(): void {
     if (this.isMatchOver()) {
+      this.hasMatchOver = true;
       this.isMatchStarted.next(false);
     } else {
       if (this.match.teamA.isBatting) {
         this.match.teamA.isBatting = false;
         this.match.teamA.isPlayed = true;
         this.match.teamB.isBatting = true;
-      } else {
+      } else if (this.match.teamB.isBatting) {
         this.match.teamB.isBatting = false;
         this.match.teamB.isPlayed = true;
-        this.match.teamA.isBatting = true;
+        this.isMatchStarted.next(false);
       }
+      this.overs = 0;
     }
   }
   protected isMatchOver(): boolean {
-    return ((this.match.teamA.isPlayed && this.match.teamA.outs === this.match.teamA.players.length)
-      &&
-      (this.match.teamB.isPlayed && this.match.teamB.outs === this.match.teamB.players.length));
+    return (this.match.teamA.isPlayed && this.match.teamB.isPlayed);
   }
   protected pickRandomPlayer(): number {
     let playersLength = 6;
     return Math.floor(Math.random() * (playersLength - 0) + 0);
   }
-
-  protected get defaultBatsMan(): IPlayer {
-    return {
-      name: 'A',
-      isOut: false,
-      run: 0
-    };
-  }
-  protected get defaultBaller(): IPlayer {
-    return {
-      name: 'A',
-      wides: 0,
-      noBalls: 0,
-      over: 0,
-      wickets: 0
-    };
-  };
 }
