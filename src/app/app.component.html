@@ -1,0 +1,9 @@
+<nav class="navbar navbar-light bg-light">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="/">
+      Cricket
+    </a>
+  </div>
+</nav>
+<button type="button" *ngIf="!isStarted" class="btn btn-success" (click)="startMatch()">Start</button>
+<button type="button" *ngIf="isStarted" class="btn btn-success" (click)="pauseMatch()">Pause</button>
