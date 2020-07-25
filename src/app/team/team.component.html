@@ -8,9 +8,9 @@
             <h4>Score {{teamScore}}</h4>
           </span>
         </h5>
-        <h6 class="card-subtitle mb-2 text-muted">{{getLabel}}</h6>
+        <h6 *ngIf="!matchOver" class="card-subtitle mb-2 text-muted">{{getLabel}}</h6>
       </span>
-      <span>
+      <span *ngIf="!matchOver">
         <img [src]="getImage" alt="..." width="75" height="75" />
       </span>
     </div>

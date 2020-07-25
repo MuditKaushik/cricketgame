@@ -11,16 +11,21 @@ import { IMatch, IPlayer, getPlayers } from './models/match';
 })
 export class AppComponent {
   title = 'cricketmatch';
+  winnerMessage = '';
   isStarted: boolean = false;
+  hasMatchOver: boolean = false;
 
+  match: IMatch;
   batsMan: IPlayer;
   baller: IPlayer;
 
-  match: IMatch;
+  overs: number = 0;
+  runs: number = 0;
+  ballPerOver: number = 6;
 
   protected isMatchStarted: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
   protected score = [0, 1, 2, 3, 4, 5, 6, 7, 'wd', 'nb', 'out'];
-  protected overPerMatch = 5;
+  protected overPerMatch = 20;
 
   constructor() {
     this.match = {
@@ -46,11 +51,6 @@ export class AppComponent {
     this.match.teamA.isBatting = true;
   }
 
-  overs: number = 0;
-  runs: number = 0;
-  ballPerOver: number = 6;
-  hasMatchOver: boolean = false;
-
   pauseMatch(): void {
     this.isMatchStarted.next(false);
   }
@@ -66,9 +66,24 @@ export class AppComponent {
     let rangeNum = (range - start) + start;
     return Math.floor(Math.random() * rangeNum);
   }
+  protected get getTeamOvers(): number {
+    if (!this.match.teamA.isBatting) {
+      return this.match.teamA.players.reduce((initOver, player) => {
+        return initOver + player.over;
+      }, 0);
+    } else {
+      return this.match.teamB.players.reduce((initOver, player) => {
+        return initOver + player.over;
+      }, 0);
+    }
+  }
+  protected get pickRandomPlayer(): number {
+    let playersLength = 5;
+    return Math.floor(Math.random() * Math.floor(playersLength));
+  }
   protected started(): void {
     this.assignBattingTeam();
-    this.baller = this.assignNextBaller(this.pickRandomPlayer());
+    this.baller = this.assignNextBaller(this.pickRandomPlayer);
     interval(1000).pipe(
       timeInterval(),
       switchMap(_ => this.isMatchStarted),
@@ -102,20 +117,6 @@ export class AppComponent {
         this.baller.wickets = this.baller.wickets + 1;
         this.ballPerOver = this.ballPerOver - 1;
         this.batsMan.isOut = true;
-        let wicketTaken = this.getTotalWicketsTaken();
-        if (this.match.teamA.isBatting) {
-          if (wicketTaken === this.match.teamA.players.length) {
-            // TODO: switch teams;
-            this.switchTeams();
-            this.assignBattingTeam()
-          }
-        } else if (this.match.teamB.isBatting) {
-          if (wicketTaken === this.match.teamB.players.length) {
-            // TODO: switch teams;
-            this.switchTeams();
-            this.assignBattingTeam()
-          }
-        }
         // TODO: chosse next batsman;
         this.batsMan = this.assignNextBatsman();
         break;
@@ -127,24 +128,16 @@ export class AppComponent {
         }
         break;
     }
-    if (this.ballPerOver === 0) {
-      this.ballPerOver = 6;
-      this.overs = this.overs + 1;
-      this.baller.over = this.overs;
-      if (this.overs === this.overPerMatch) {
-        this.switchTeams();
-        this.assignBattingTeam()
-      }
-      this.baller = this.assignNextBaller(this.pickRandomPlayer());
-    }
-    // this.calculateScore();
+    this.calculateBallerOvers();
+    this.canSwitchTeam();
   }
   protected assignBattingTeam(): void {
     if (!this.isMatchOver()) {
       this.batsMan = this.assignNextBatsman();
-      this.baller = this.assignNextBaller(this.pickRandomPlayer());
+      this.baller = this.assignNextBaller(this.pickRandomPlayer);
     } else {
       this.hasMatchOver = true;
+      this.declareWinningTeam();
       this.isMatchStarted.next(false);
     }
   }
@@ -155,13 +148,14 @@ export class AppComponent {
           return player;
         }
       }
-    } else {
+    } else if (this.match.teamB.isBatting) {
       for (let player of this.match.teamB.players) {
         if (!player.isOut) {
           return player;
         }
       }
     }
+    return {} as IPlayer;
   }
   protected assignNextBaller(nextballer: number): IPlayer {
     if (!this.match.teamA.isBatting) {
@@ -187,6 +181,7 @@ export class AppComponent {
   protected switchTeams(): void {
     if (this.isMatchOver()) {
       this.hasMatchOver = true;
+      this.declareWinningTeam();
       this.isMatchStarted.next(false);
     } else {
       if (this.match.teamA.isBatting) {
@@ -199,13 +194,57 @@ export class AppComponent {
         this.isMatchStarted.next(false);
       }
       this.overs = 0;
+      this.ballPerOver = 6;
     }
   }
   protected isMatchOver(): boolean {
     return (this.match.teamA.isPlayed && this.match.teamB.isPlayed);
   }
-  protected pickRandomPlayer(): number {
-    let playersLength = 6;
-    return Math.floor(Math.random() * (playersLength - 0) + 0);
+  protected calculateBallerOvers(): void {
+    if (this.ballPerOver === 0) {
+      this.ballPerOver = 6;
+      this.baller.over += 1;
+      this.baller = this.assignNextBaller(this.pickRandomPlayer);
+    }
+  }
+  protected canSwitchTeam(): void {
+    // if match over completed.
+    if (this.getTeamOvers === this.overPerMatch) {
+      this.switchTeams();
+      this.assignBattingTeam()
+    } else {
+      // Condition all batsman are out.
+      let wicketTaken = this.getTotalWicketsTaken();
+      if (this.match.teamA.isBatting) {
+        if (wicketTaken === this.match.teamA.players.length) {
+          // TODO: switch teams;
+          this.switchTeams();
+          this.assignBattingTeam()
+        }
+      } else if (this.match.teamB.isBatting) {
+        if (wicketTaken === this.match.teamB.players.length) {
+          // TODO: switch teams;
+          this.switchTeams();
+          this.assignBattingTeam()
+        }
+      }
+    }
+  }
+  protected declareWinningTeam(): void {
+    let teamAplayerScores = this.match.teamA.players.reduce((initScore, player) => {
+      return initScore + player.run;
+    }, 0);
+    let teamBplayerScore = this.match.teamB.players.reduce((initScore, player) => {
+      return initScore + player.run;
+    }, 0);
+
+    let totalTeamAScore = teamAplayerScores + this.match.teamA.run;
+    let totalTeamBScore = teamBplayerScore + this.match.teamB.run;
+
+    if (totalTeamAScore > totalTeamBScore) {
+      this.winnerMessage = `${this.match.teamA.name} wins this match.`
+    } else {
+      this.winnerMessage = `${this.match.teamB.name} wins this match.`
+    }
   }
 }

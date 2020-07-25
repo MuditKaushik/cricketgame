@@ -8,6 +8,7 @@ import { ITeam, IPlayer } from '../models/match';
 })
 export class TeamComponent implements OnInit {
   @Input('detail') team: ITeam;
+  @Input('matchOver') matchOver: boolean = false;
   position: string;
   constructor() { }
   ngOnInit(): void {
@@ -31,8 +32,9 @@ export class TeamComponent implements OnInit {
   }
 
   get teamScore(): number {
-    return this.team.players.reduce((initScore, player) => {
+    let playerScores = this.team.players.reduce((initScore, player) => {
       return initScore + player.run;
     }, 0);
+    return playerScores + this.team.run;
   }
 }
